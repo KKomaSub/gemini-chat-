@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Gemini Chat · No JavaScript</title>
+  <style>
+    :root { color-scheme: light dark; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: Canvas; color: CanvasText; }
+    .app { width: min(820px, 100%); min-height: 100vh; margin: 0 auto; padding: 18px 16px 28px; display: flex; flex-direction: column; }
+    header { display: flex; align-items: center; justify-content: space-between; padding: 4px 2px 18px; }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: -.02em; }
+    .logo { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 12px; background: linear-gradient(135deg, #7c4dff, #4f9cff); color: white; font-size: 18px; }
+    main { flex: 1; display: grid; place-items: center; }
+    .start { width: 100%; text-align: center; }
+    .spark { font-size: 48px; margin-bottom: 12px; }
+    h1 { margin: 0 0 9px; font-size: clamp(27px, 6vw, 38px); letter-spacing: -.035em; }
+    .desc { margin: 0 auto 28px; max-width: 560px; opacity: .68; line-height: 1.6; }
+    form { width: min(700px, 100%); margin: 0 auto; }
+    .composer { display: flex; gap: 10px; align-items: flex-end; padding: 10px; border-radius: 22px; border: 1px solid color-mix(in srgb, CanvasText 18%, transparent); background: Canvas; box-shadow: 0 8px 30px color-mix(in srgb, CanvasText 8%, transparent); }
+    textarea { flex: 1; min-height: 54px; max-height: 170px; resize: vertical; border: 0; outline: 0; padding: 14px 10px; background: transparent; color: CanvasText; font: inherit; line-height: 1.45; }
+    button { border: 0; border-radius: 15px; padding: 13px 17px; background: #4f7cff; color: white; font: inherit; font-weight: 750; cursor: pointer; }
+    .notes { margin: 14px 0 0; font-size: 12px; opacity: .56; }
+    @media (max-width: 560px) { .app { padding: 12px 10px 18px; } .composer { gap: 6px; } button { padding-inline: 13px; } }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header><div class="brand"><div class="logo" aria-hidden="true">✦</div><span>Gemini Chat</span></div></header>
+    <main>
+      <section class="start">
+        <div class="spark" aria-hidden="true">✦</div>
+        <h1>무엇이든 물어보세요</h1>
+        <p class="desc">JavaScript가 차단된 환경에서도 동작하도록 HTML 폼 제출과 서버 렌더링만 사용합니다.</p>
+        <form action="/api/chat" method="post" accept-charset="utf-8">
+          <input type="hidden" name="history" value="[]">
+          <div class="composer">
+            <textarea name="message" maxlength="4000" rows="2" placeholder="메시지를 입력하세요" aria-label="메시지" required></textarea>
+            <button type="submit">보내기</button>
+          </div>
+        </form>
+        <p class="notes">JS 없음 · fetch 없음 · API 키는 서버에만 저장</p>
+      </section>
+    </main>
+  </div>
+</body>
+</html>
