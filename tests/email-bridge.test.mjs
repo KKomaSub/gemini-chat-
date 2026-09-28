@@ -210,9 +210,13 @@ test('with marker and a small JPEG Gemini output, image is uploaded and delivere
   }
 });
 
-test('Apps Script polls target Gmail about every 20 seconds and prevents overlap', () => {
+test('Apps Script polls target Gmail about every 20 seconds, prevents overlap, and filters the phone sender', () => {
   const source = fs.readFileSync(new URL('../apps-script/Code.gs', import.meta.url), 'utf8');
   assert.match(source, /ijunu3343@gmail\.com/);
+  assert.match(source, /01082161403@vmms\.nate\.com/);
+  assert.match(source, /ALLOWED_SENDER_NUMBER\s*=\s*'01082161403'/);
+  assert.match(source, /isAllowedSender_\(message\.getFrom\(\)\)/);
+  assert.match(source, /email\.includes\(ALLOWED_SENDER_NUMBER\)/);
   assert.match(source, /getAttachments\(/);
   assert.match(source, /base64Encode/);
   assert.match(source, /everyMinutes\(1\)/);
