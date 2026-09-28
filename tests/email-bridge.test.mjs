@@ -161,12 +161,18 @@ test('with marker and a small JPEG Gemini output, image is uploaded and delivere
   }
 });
 
-test('Apps Script polls target Gmail, reads attachments, and installs a one-minute trigger', () => {
+test('Apps Script polls target Gmail about every 20 seconds and prevents overlap', () => {
   const source = fs.readFileSync(new URL('../apps-script/Code.gs', import.meta.url), 'utf8');
   assert.match(source, /ijunu3343@gmail\.com/);
   assert.match(source, /getAttachments\(/);
   assert.match(source, /base64Encode/);
   assert.match(source, /everyMinutes\(1\)/);
+  assert.match(source, /POLL_INTERVAL_MS\s*=\s*20000/);
+  assert.match(source, /for \(let cycle = 0; cycle < 3; cycle\+\+\)/);
+  assert.match(source, /Utilities\.sleep\(waitMs\)/);
+  assert.match(source, /LockService\.getScriptLock\(\)/);
+  assert.match(source, /tryLock\(1000\)/);
+  assert.match(source, /releaseLock\(\)/);
   assert.match(source, /message\.markRead\(\)/);
   assert.match(source, /X-Email-Webhook-Secret/);
 });
