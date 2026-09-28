@@ -3,6 +3,12 @@ export const SMS_LIMIT_BYTES = 90;
 export const LONG_LIMIT_BYTES = 2000;
 export const MMS_IMAGE_LIMIT_BYTES = 200 * 1024;
 
+const MOBILE_MAIL_FOOTER_RE = /(?:\r?\n+)?={20,}[ \t]*\r?\n본 메일은 휴대폰에서 발신된 발신 전용 메일이므로 회신할 수 없습니다\.[ \t]*\r?\n회신을 원하시면 본 메일 발신자 계정의 이동전화번호로 문자메시지를 보내세요\.[ \t]*\r?\n={20,}[ \t]*(?:\r?\n|[ \t])*$/u;
+
+export function stripMobileMailFooter(text = '') {
+  return String(text).replace(MOBILE_MAIL_FOOTER_RE, '').trimEnd();
+}
+
 export function hasMmsMarker(text = '') {
   return /<mms가능>\s*$/u.test(String(text));
 }
