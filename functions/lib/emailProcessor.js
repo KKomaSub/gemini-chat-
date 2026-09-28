@@ -7,6 +7,7 @@ import {
   hasMmsMarker,
   solapiByteLength,
   stripMmsMarker,
+  stripMobileMailFooter,
   truncateSolapi,
 } from './emailBridge.js';
 import { askGeminiForEmail } from './geminiEmail.js';
@@ -22,15 +23,17 @@ export async function processEmailBridge(env, raw) {
     skippedAttachments: Array.isArray(raw?.skippedAttachments) ? raw.skippedAttachments : [],
   };
 
-  if (!data.body.trim() && !data.subject.trim() && data.attachments.length === 0) {
+  const bodyWithoutMobileFooter = stripMobileMailFooter(data.body);
+
+  if (!bodyWithoutMobileFooter.trim() && !data.subject.trim() && data.attachments.length === 0) {
     throw new Error('empty email');
   }
   if (data.to && !data.to.toLowerCase().includes('ijunu3343@gmail.com')) {
     throw new Error('wrong recipient');
   }
 
-  const allowMms = hasMmsMarker(data.body);
-  const cleanBody = allowMms ? stripMmsMarker(data.body) : data.body;
+  const allowMms = hasMmsMarker(bodyWithoutMobileFooter);
+  const cleanBody = allowMms ? stripMmsMarker(bodyWithoutMobileFooter) : bodyWithoutMobileFooter;
   const prompt = composePrompt({ subject: data.subject, body: cleanBody, skippedAttachments: data.skippedAttachments });
   const gemini = await askGeminiForEmail(env, { prompt, attachments: data.attachments, allowMms });
 
