@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Gemini Chat</title>
+<style>
+:root{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color-scheme:light dark}*{box-sizing:border-box}body{margin:0;background:Canvas;color:CanvasText}.app{width:min(820px,100%);min-height:100vh;margin:auto;padding:18px 14px;display:flex;flex-direction:column}header{font-weight:800;font-size:20px;padding:8px 4px 18px}.main{flex:1;display:grid;place-items:center;text-align:center;padding-bottom:125px}.spark{font-size:46px}h1{margin:8px 0}.desc{opacity:.66;line-height:1.55;max-width:600px;margin:8px auto}.composer{position:fixed;left:0;right:0;bottom:0;padding:12px;background:Canvas;border-top:1px solid #8883}form{width:min(790px,100%);margin:auto;display:flex;gap:8px}.box{flex:1;min-width:0;min-height:52px;border:1px solid #8886;border-radius:18px;padding:14px;background:Canvas;color:CanvasText;font:inherit}button{border:0;border-radius:14px;padding:0 18px;background:#4f7cff;color:#fff;font:inherit;font-weight:700}.note{font-size:11px;opacity:.56;text-align:center;margin:7px 0 0;overflow-wrap:anywhere}@media(max-width:480px){.app{padding:12px 10px}.composer{padding:9px}.box{padding:12px}button{padding:0 14px}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>✦ Gemini Chat</header>
+  <main class="main">
+    <div>
+      <div class="spark">✦</div>
+      <h1>무엇이든 물어보세요</h1>
+      <p class="desc">삼성 HTML Viewer는 인터넷 로드를 막기 때문에 첫 전송을 GET 링크 이동으로 처리하여 외부 브라우저로 넘깁니다.</p>
+    </div>
+  </main>
+</div>
+<div class="composer">
+  <form action="https://gemini-chat-no-wifi.pages.dev/api/chat" method="get" accept-charset="utf-8">
+    <input type="hidden" name="history" value="[]">
+    <input class="box" type="text" name="message" maxlength="1800" placeholder="메시지를 입력하세요" required>
+    <button type="submit">보내기</button>
+  </form>
+  <p class="note">첫 전송 후 브라우저에서 Gemini 응답이 열립니다 · JavaScript 없음</p>
+</div>
+</body>
+</html>
