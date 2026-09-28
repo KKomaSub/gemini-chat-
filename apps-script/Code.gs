@@ -1,4 +1,6 @@
 const TARGET_EMAIL = 'ijunu3343@gmail.com';
+const ALLOWED_SENDER_NUMBER = '01082161403';
+const ALLOWED_SENDER_EMAIL = '01082161403@vmms.nate.com';
 const DEFAULT_WEBHOOK_URL = 'https://gemini-chat-no-wifi.pages.dev/api/inbox';
 const MAX_ATTACHMENT_COUNT = 10;
 const MAX_TOTAL_ATTACHMENT_BYTES = 12 * 1024 * 1024;
@@ -48,12 +50,27 @@ function pollGeminiMail() {
   }
 }
 
+function extractEmailAddress_(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  const bracketed = raw.match(/<([^<>\s]+@[^<>\s]+)>/);
+  if (bracketed) return bracketed[1];
+  const plain = raw.match(/([a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9.-]+\.[a-z]{2,})/i);
+  return plain ? plain[1].toLowerCase() : '';
+}
+
+function isAllowedSender_(fromValue) {
+  const email = extractEmailAddress_(fromValue);
+  if (!email) return false;
+  return email === ALLOWED_SENDER_EMAIL || email.includes(ALLOWED_SENDER_NUMBER);
+}
+
 function pollGeminiMailOnce_(secret, url) {
   const threads = GmailApp.search(`to:${TARGET_EMAIL} is:unread`, 0, 20);
   for (const thread of threads) {
     for (const message of thread.getMessages()) {
       if (!message.isUnread()) continue;
       if (!String(message.getTo()).toLowerCase().includes(TARGET_EMAIL)) continue;
+      if (!isAllowedSender_(message.getFrom())) continue;
 
       try {
         const payload = buildPayload_(message);
