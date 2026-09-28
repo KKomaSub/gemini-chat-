@@ -65,7 +65,9 @@ function isAllowedSender_(fromValue) {
 }
 
 function pollGeminiMailOnce_(secret, url) {
-  const threads = GmailApp.search(`to:${TARGET_EMAIL} is:unread`, 0, 20);
+  // Gmail 단계부터 휴대폰 발신자 메일만 검색한다. 아래 message.getFrom()
+  // 검사는 검색 연산자가 넓게 매칭되더라도 다시 한 번 차단하는 이중 필터다.
+  const threads = GmailApp.search(`to:${TARGET_EMAIL} is:unread from:${ALLOWED_SENDER_NUMBER}`, 0, 20);
   for (const thread of threads) {
     for (const message of thread.getMessages()) {
       if (!message.isUnread()) continue;
