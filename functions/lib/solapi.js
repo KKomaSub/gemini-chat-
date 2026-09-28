@@ -35,6 +35,21 @@ async function requestSolapi(env, path, payload) {
   return body;
 }
 
+function throwIfMessageRegistrationFailed(result) {
+  const failed = Array.isArray(result?.failedMessageList) ? result.failedMessageList : [];
+  if (failed.length) {
+    const item = failed[0] || {};
+    const code = item.statusCode || 'registration_failed';
+    const message = item.statusMessage || 'message registration failed';
+    throw new Error(`SOLAPI ${code}: ${message}`);
+  }
+
+  const count = result?.groupInfo?.count;
+  if (count && Number(count.registeredFailed || 0) > 0 && Number(count.registeredSuccess || 0) === 0) {
+    throw new Error('SOLAPI registration_failed: no message was registered');
+  }
+}
+
 export async function uploadMmsJpeg(env, dataBase64, name = 'gemini.jpg') {
   const result = await requestSolapi(env, '/storage/v1/files', {
     file: dataBase64,
@@ -51,5 +66,12 @@ export async function sendSolapiMessage(env, { type, text, imageId = '' }) {
   if (!to || !from) throw new Error('SOLAPI_TO or SOLAPI_FROM is missing');
   const message = { to, from, text, type, autoTypeDetect: false };
   if (type === 'MMS' && imageId) message.imageId = imageId;
-  return requestSolapi(env, '/messages/v4/send-many/detail', { messages: [message] });
+
+  const result = await requestSolapi(env, '/messages/v4/send-many/detail', {
+    messages: [message],
+    strict: false,
+    showMessageList: true,
+  });
+  throwIfMessageRegistrationFailed(result);
+  return result;
 }
