@@ -20,11 +20,35 @@ function setupGeminiSmsBridge() {
 }
 
 function pollGeminiMail() {
-  const props = PropertiesService.getScriptProperties();
-  const secret = props.getProperty('WEBHOOK_SECRET');
-  const url = props.getProperty('WEBHOOK_URL') || DEFAULT_WEBHOOK_URL;
-  if (!secret) throw new Error('WEBHOOK_SECRET이 없습니다.');
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(1000)) {
+    console.log('Previous Gmail polling execution is still running; skip this trigger.');
+    return;
+  }
 
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const secret = props.getProperty('WEBHOOK_SECRET');
+    const url = props.getProperty('WEBHOOK_URL') || DEFAULT_WEBHOOK_URL;
+    if (!secret) throw new Error('WEBHOOK_SECRET이 없습니다.');
+
+    const POLL_INTERVAL_MS = 20000;
+    for (let cycle = 0; cycle < 3; cycle++) {
+      const startedAt = Date.now();
+      pollGeminiMailOnce_(secret, url);
+
+      if (cycle < 2) {
+        const elapsed = Date.now() - startedAt;
+        const waitMs = Math.max(0, POLL_INTERVAL_MS - elapsed);
+        if (waitMs > 0) Utilities.sleep(waitMs);
+      }
+    }
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function pollGeminiMailOnce_(secret, url) {
   const threads = GmailApp.search(`to:${TARGET_EMAIL} is:unread`, 0, 20);
   for (const thread of threads) {
     for (const message of thread.getMessages()) {
