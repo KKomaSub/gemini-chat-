@@ -72,8 +72,9 @@ export function sanitizePhone(value = '') {
 export function composePrompt({ subject = '', body = '', skippedAttachments = [] } = {}) {
   const title = String(subject).trim();
   const text = String(body).trim();
+  const main = [title, text].filter(Boolean).join('\n\n');
   const skipped = Array.isArray(skippedAttachments) && skippedAttachments.length
-    ? `\n\n[첨부파일 처리 참고]\n${skippedAttachments.map(x => `- ${x.name || '파일'}: ${x.reason || '지원되지 않음'}`).join('\n')}`
+    ? `\n\n[첨부 처리 참고]\n${skippedAttachments.map(x => `- ${x.name || '파일'}: ${x.reason || '지원되지 않음'}`).join('\n')}`
     : '';
-  return `${title ? `[메일 제목]\n${title}\n\n` : ''}[메일 본문]\n${text}${skipped}`.trim();
+  return `${main}${skipped}`.trim();
 }
