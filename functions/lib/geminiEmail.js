@@ -6,14 +6,23 @@ const MAX_INPUT_ATTACHMENTS = 10;
 const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504]);
 
 function modeInstruction(allowMms) {
+  const transportInstruction = [
+    'The input may have arrived through email, but email is only a transport channel.',
+    'Treat the text and attachments exactly like a normal user message in an ordinary chat.',
+    'Do not mention email, sender, subject, inbox, forwarding, or the delivery mechanism unless the user explicitly asks about them.',
+    'Answer the user\'s actual request directly without commenting on how the message arrived.',
+  ];
+
   if (!allowMms) {
     return [
+      ...transportInstruction,
       'Reply for delivery as a short SOLAPI SMS.',
       'Return plain text only and do not create or attach images, files, audio, or other binary output.',
       'Aim to stay below 80 delivery bytes. Avoid emoji.',
     ].join(' ');
   }
   return [
+    ...transportInstruction,
     'Reply for delivery as SMS, LMS, or MMS.',
     'Keep text within 2000 delivery bytes.',
     'Only when genuinely useful or explicitly requested, you may return one JPEG image plus text.',
