@@ -17,6 +17,29 @@ export function stripMmsMarker(text = '') {
   return String(text).replace(/<mms가능>\s*$/u, '').trimEnd();
 }
 
+export function sanitizeSolapiText(text = '') {
+  let value = String(text).normalize('NFC')
+    .replace(/\r\n?/g, '\n')
+    .replace(/[\t\f\v]+/g, ' ')
+    .replace(/[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/g, ' ')
+    .replace(/[“”„‟]/g, '"')
+    .replace(/[‘’‚‛]/g, "'")
+    .replace(/[‐‑‒–—―−]/g, '-')
+    .replace(/…/g, '...')
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
+    .replace(/[\u200B-\u200D\u2060\uFEFF\uFE0E\uFE0F]/g, '');
+
+  // Korean SMS/LMS is EUC-KR based. Four-byte Unicode characters such as
+  // color emoji cannot be delivered reliably, so remove them before SOLAPI.
+  value = value.replace(/[\u{10000}-\u{10FFFF}]/gu, '');
+
+  return value
+    .split('\n')
+    .map((line) => line.replace(/ {2,}/g, ' ').trimEnd())
+    .join('\n')
+    .trim();
+}
+
 // SOLAPI documents SMS/LMS byte limits in EUC-KR terms: ASCII-like
 // characters are 1 byte and Korean characters are 2 bytes. To avoid
 // accidentally crossing the limit with non-ASCII characters, every
