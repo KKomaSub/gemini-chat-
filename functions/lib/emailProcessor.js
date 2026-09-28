@@ -5,6 +5,7 @@ import {
   base64ByteLength,
   composePrompt,
   hasMmsMarker,
+  sanitizeSolapiText,
   solapiByteLength,
   stripMmsMarker,
   stripMobileMailFooter,
@@ -37,12 +38,12 @@ export async function processEmailBridge(env, raw) {
   const prompt = composePrompt({ subject: data.subject, body: cleanBody, skippedAttachments: data.skippedAttachments });
   const gemini = await askGeminiForEmail(env, { prompt, attachments: data.attachments, allowMms });
 
-  let text = gemini.text || '';
+  let text = sanitizeSolapiText(gemini.text || '');
   let imageId = '';
   let attachmentSent = false;
 
   if (!allowMms) {
-    if (!text) text = '파일/이미지 응답은 <mms가능> 없이 전송할 수 없습니다.';
+    if (!text) text = '문자로 보낼 수 있는 형식의 응답을 생성하지 못했습니다.';
     text = truncateSolapi(text, SMS_LIMIT_BYTES);
   } else {
     if (!text) text = gemini.images.length ? '요청하신 이미지입니다.' : '응답을 생성하지 못했습니다.';
@@ -71,6 +72,7 @@ export async function processEmailBridge(env, raw) {
     text,
     textBytes,
     attachmentSent,
-    solapiGroupId: delivery?.groupId || null,
+    solapiGroupId: delivery?.groupInfo?.groupId || delivery?.groupId || null,
+    solapiMessageId: delivery?.messageList?.[0]?.messageId || null,
   };
 }
