@@ -11,6 +11,8 @@ function modeInstruction(allowMms) {
     'Treat the text and attachments exactly like a normal user message in an ordinary chat.',
     'Do not mention email, sender, subject, inbox, forwarding, or the delivery mechanism unless the user explicitly asks about them.',
     'Answer the user\'s actual request directly without commenting on how the message arrived.',
+    'Use plain text suitable for Korean SMS/LMS: ordinary Korean, ASCII letters and numbers, normal spaces/newlines, and ordinary ASCII punctuation.',
+    'Do not use emoji, Markdown decoration, smart quotes, long dashes, zero-width characters, or decorative Unicode symbols.',
   ];
 
   if (!allowMms) {
@@ -18,7 +20,7 @@ function modeInstruction(allowMms) {
       ...transportInstruction,
       'Reply for delivery as a short SOLAPI SMS.',
       'Return plain text only and do not create or attach images, files, audio, or other binary output.',
-      'Aim to stay below 80 delivery bytes. Avoid emoji.',
+      'Aim to stay below 80 delivery bytes.',
     ].join(' ');
   }
   return [
