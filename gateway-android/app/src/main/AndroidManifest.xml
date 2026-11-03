@@ -6,13 +6,17 @@
     <uses-permission android:name="android.permission.SEND_SMS" />
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
     <uses-permission android:name="android.permission.RECEIVE_MMS" />
-    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <uses-permission android:name="android.permission.WRITE_SMS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <application android:allowBackup="false" android:label="Private MMS Gateway" android:usesCleartextTraffic="false">
+    <application
+        android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:label="Private MMS Gateway"
+        android:supportsRtl="true"
+        android:usesCleartextTraffic="false">
+
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -27,8 +31,13 @@
                 <data android:scheme="mmsto" />
             </intent-filter>
         </activity>
+
         <service android:name=".GatewayService" android:exported="false" />
-        <service android:name=".RespondService" android:permission="android.permission.SEND_RESPOND_VIA_MESSAGE" android:exported="true">
+
+        <service
+            android:name=".RespondService"
+            android:permission="android.permission.SEND_RESPOND_VIA_MESSAGE"
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.RESPOND_VIA_MESSAGE" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -38,17 +47,32 @@
                 <data android:scheme="mmsto" />
             </intent-filter>
         </service>
-        <receiver android:name=".SmsDeliverReceiver" android:permission="android.permission.BROADCAST_SMS" android:exported="true">
-            <intent-filter><action android:name="android.provider.Telephony.SMS_DELIVER" /></intent-filter>
+
+        <receiver
+            android:name=".SmsDeliverReceiver"
+            android:permission="android.permission.BROADCAST_SMS"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.provider.Telephony.SMS_DELIVER" />
+            </intent-filter>
         </receiver>
-        <receiver android:name=".MmsDeliverReceiver" android:permission="android.permission.BROADCAST_WAP_PUSH" android:exported="true">
+
+        <receiver
+            android:name=".MmsDeliverReceiver"
+            android:permission="android.permission.BROADCAST_WAP_PUSH"
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.provider.Telephony.WAP_PUSH_DELIVER" />
                 <data android:mimeType="application/vnd.wap.mms-message" />
             </intent-filter>
         </receiver>
-        <receiver android:name=".GatewaySentReceiver" android:exported="false" />\n        <receiver android:name=".BootReceiver" android:exported="false">
-            <intent-filter><action android:name="android.intent.action.BOOT_COMPLETED" /></intent-filter>
+
+        <receiver android:name=".GatewaySentReceiver" android:exported="false" />
+
+        <receiver android:name=".BootReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
         </receiver>
     </application>
 </manifest>
