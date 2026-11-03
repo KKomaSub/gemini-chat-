@@ -18,6 +18,14 @@ test('Reddit command parser recognizes list and numbered attachment commands', (
   assert.deepEqual(parseRedditCommand('고양이 r검색결과'), {
     kind: 'list',
     query: '고양이',
+    page: 1,
+    explicitPage: false,
+  });
+  assert.deepEqual(parseRedditCommand('고양이 r검색결과2'), {
+    kind: 'list',
+    query: '고양이',
+    page: 2,
+    explicitPage: true,
   });
   assert.deepEqual(parseRedditCommand('고양이 사진 r2결과'), {
     kind: 'attachment',
@@ -81,7 +89,7 @@ test('r검색결과 bypasses Gemini and non-MMS mode sends only first title', as
   }
 });
 
-test('r검색결과 with <mms가능> sends all returned titles with numbering and attachment flags', async () => {
+test('r검색결과 with <mms가능> sends only the first <=2000-byte page', async () => {
   const sentTexts = [];
   const calls = [];
   const oldFetch = globalThis.fetch;
@@ -116,9 +124,12 @@ test('r검색결과 with <mms가능> sends all returned titles with numbering an
       body: '고양이 r검색결과<mms가능>',
     });
 
-    const combined = sentTexts.join('\n');
+    assert.equal(sentTexts.length, 1);
+    const combined = sentTexts[0];
     assert.match(combined, /1번 첫 번째 \(첨부파일: 있음\)/);
     assert.match(combined, /2번 두 번째 \(첨부파일: 없음\)/);
+    assert.ok(result.textBytes <= 2000);
+    assert.equal(result.messageCount, 1);
     assert.equal(result.reddit, true);
     assert.equal(calls.some((url) => url.includes('generativelanguage.googleapis.com')), false);
   } finally {
@@ -177,6 +188,96 @@ test('rN결과 sends the Nth Reddit JPEG attachment as MMS without Gemini', asyn
     assert.equal(result.attachmentSent, true);
     assert.equal(sentMessage.imageId, 'REDDIT_FILE');
     assert.equal(calls.some((url) => url.includes('generativelanguage.googleapis.com')), false);
+  } finally {
+    globalThis.fetch = oldFetch;
+  }
+});
+
+
+test('r검색결과2 sends the second 2000-byte page instead of auto-sending page 2', async () => {
+  const sentTexts = [];
+  const oldFetch = globalThis.fetch;
+
+  const posts = Array.from({ length: 45 }, (_, i) =>
+    `<shreddit-post post-title="${String(i + 1).padStart(2, '0')} ${'가'.repeat(35)}" post-type="text"></shreddit-post>`
+  ).join('');
+
+  globalThis.fetch = async (url, init = {}) => {
+    const target = String(url);
+
+    if (target.startsWith('https://www.reddit.com/search/')) {
+      return new Response(posts, {
+        status: 200,
+        headers: { 'content-type': 'text/html' },
+      });
+    }
+
+    if (target.includes('api.solapi.com/messages/v4/send-many/detail')) {
+      sentTexts.push(JSON.parse(init.body).messages[0].text);
+      return Response.json({
+        groupInfo: { groupId: 'GP', count: { registeredSuccess: 1, registeredFailed: 0 } },
+        failedMessageList: [],
+        messageList: [{ messageId: 'MP' }],
+      });
+    }
+
+    throw new Error('unexpected URL: ' + target);
+  };
+
+  try {
+    const first = await processEmailBridge(env, {
+      to: 'ijunu3343@gmail.com',
+      body: '고양이 r검색결과<mms가능>',
+    });
+    const second = await processEmailBridge(env, {
+      to: 'ijunu3343@gmail.com',
+      body: '고양이 r검색결과2',
+    });
+
+    assert.equal(sentTexts.length, 2);
+    assert.ok(first.textBytes <= 2000);
+    assert.ok(second.textBytes <= 2000);
+    assert.notEqual(sentTexts[0], sentTexts[1]);
+    assert.equal(first.page, 1);
+    assert.equal(second.page, 2);
+    assert.equal(first.hasMore, true);
+    assert.equal(second.reddit, true);
+  } finally {
+    globalThis.fetch = oldFetch;
+  }
+});
+
+test('r검색결과 does not automatically send continuation pages over 2000 bytes', async () => {
+  let sendCount = 0;
+  const oldFetch = globalThis.fetch;
+  const posts = Array.from({ length: 60 }, (_, i) =>
+    `<shreddit-post post-title="${i + 1} ${'나'.repeat(40)}" post-type="text"></shreddit-post>`
+  ).join('');
+
+  globalThis.fetch = async (url) => {
+    const target = String(url);
+    if (target.startsWith('https://www.reddit.com/search/')) {
+      return new Response(posts, { status: 200, headers: { 'content-type': 'text/html' } });
+    }
+    if (target.includes('api.solapi.com/messages/v4/send-many/detail')) {
+      sendCount += 1;
+      return Response.json({
+        groupInfo: { groupId: 'ONE', count: { registeredSuccess: 1, registeredFailed: 0 } },
+        failedMessageList: [],
+        messageList: [{ messageId: 'ONE' }],
+      });
+    }
+    throw new Error('unexpected URL: ' + target);
+  };
+
+  try {
+    const result = await processEmailBridge(env, {
+      to: 'ijunu3343@gmail.com',
+      body: '고양이 r검색결과<mms가능>',
+    });
+    assert.equal(sendCount, 1);
+    assert.ok(result.textBytes <= 2000);
+    assert.equal(result.hasMore, true);
   } finally {
     globalThis.fetch = oldFetch;
   }
