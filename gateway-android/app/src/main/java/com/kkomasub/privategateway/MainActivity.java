@@ -21,8 +21,7 @@ public class MainActivity extends Activity {
     private TextView status;
     private boolean roleRequested;
 
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
+    @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -38,8 +37,7 @@ public class MainActivity extends Activity {
         continueSetup();
     }
 
-    @Override
-    protected void onResume() {
+    @Override protected void onResume() {
         super.onResume();
         if (!roleRequested) continueSetup();
     }
@@ -54,7 +52,7 @@ public class MainActivity extends Activity {
 
     private void continueSetup() {
         if (!isDefaultSmsApp()) {
-            status.setText("기본 문자 앱 권한을 허용해 주세요.\n설정 후 자동으로 계속 진행합니다.");
+            status.setText("기본 문자 앱으로 지정해 주세요.\n허용 후 자동으로 계속 진행합니다.");
             if (roleRequested) return;
             roleRequested = true;
             if (Build.VERSION.SDK_INT >= 29) {
@@ -73,32 +71,29 @@ public class MainActivity extends Activity {
         List<String> missing = new ArrayList<>();
         addIfMissing(missing, Manifest.permission.SEND_SMS);
         addIfMissing(missing, Manifest.permission.RECEIVE_SMS);
-        addIfMissing(missing, Manifest.permission.READ_PHONE_STATE);
-        if (Build.VERSION.SDK_INT >= 33) addIfMissing(missing, Manifest.permission.POST_NOTIFICATIONS);
+        addIfMissing(missing, Manifest.permission.RECEIVE_MMS);
 
         if (!missing.isEmpty()) {
-            status.setText("문자 전송 권한을 허용해 주세요.");
+            status.setText("문자 권한을 허용해 주세요.");
             requestPermissions(missing.toArray(new String[0]), REQ_PERMS);
             return;
         }
 
         GatewayService.start(this);
-        status.setText("게이트웨이 활성\n미디어는 저장하지 않고 메모리에서만 처리합니다.\n전송 내역은 문자 DB에 기록하지 않습니다.");
+        status.setText("게이트웨이 활성\n원본 미디어는 저장하지 않습니다.\n발신 내역은 문자 DB에 기록하지 않습니다.");
     }
 
     private void addIfMissing(List<String> list, String permission) {
         if (checkSelfPermission(permission) != PackageManager.PERMISSION_GRANTED) list.add(permission);
     }
 
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+    @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         roleRequested = false;
         continueSetup();
     }
 
-    @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+    @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         continueSetup();
     }
