@@ -94,7 +94,7 @@ function normalizeApiPost(post = {}) {
     permalink,
     hasAttachment,
     attachmentUrl,
-    mediaUrl: videoUrl || attachmentUrl || contentUrl || permalink,
+    mediaUrl: videoUrl || contentUrl || attachmentUrl || permalink,
   };
 }
 
