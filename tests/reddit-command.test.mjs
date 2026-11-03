@@ -282,3 +282,99 @@ test('r검색결과 does not automatically send continuation pages over 2000 byt
     globalThis.fetch = oldFetch;
   }
 });
+
+
+test('rN결과 sends a Reddit video URL when MMS cannot attach video', async () => {
+  let sentMessage;
+  const oldFetch = globalThis.fetch;
+
+  globalThis.fetch = async (url, init = {}) => {
+    const target = String(url);
+
+    if (target.startsWith('https://www.reddit.com/search/')) {
+      return new Response(
+        '<shreddit-post post-title="동영상 결과" post-type="video" content-href="https://v.redd.it/video123" permalink="/r/test/video"></shreddit-post>',
+        { status: 200, headers: { 'content-type': 'text/html' } }
+      );
+    }
+
+    if (target.includes('api.solapi.com/messages/v4/send-many/detail')) {
+      sentMessage = JSON.parse(init.body).messages[0];
+      return Response.json({
+        groupInfo: { groupId: 'GV', count: { registeredSuccess: 1, registeredFailed: 0 } },
+        failedMessageList: [],
+        messageList: [{ messageId: 'MV' }],
+      });
+    }
+
+    throw new Error('unexpected URL: ' + target);
+  };
+
+  try {
+    const result = await processEmailBridge(env, {
+      to: 'ijunu3343@gmail.com',
+      body: '동영상 r1결과',
+    });
+
+    assert.equal(result.reddit, true);
+    assert.equal(result.mediaLinkSent, true);
+    assert.equal(result.attachmentSent, false);
+    assert.match(sentMessage.text, /https:\/\/v\.redd\.it\/video123/);
+  } finally {
+    globalThis.fetch = oldFetch;
+  }
+});
+
+test('rN결과 falls back to media link when Reddit JPEG is over 200KB', async () => {
+  let sentMessage;
+  let storageCalls = 0;
+  const oldFetch = globalThis.fetch;
+
+  globalThis.fetch = async (url, init = {}) => {
+    const target = String(url);
+
+    if (target.startsWith('https://www.reddit.com/search/')) {
+      return new Response(
+        '<shreddit-post post-title="대용량 이미지" post-type="image" content-href="https://i.redd.it/large.jpg" permalink="/r/test/large"></shreddit-post>',
+        { status: 200, headers: { 'content-type': 'text/html' } }
+      );
+    }
+
+    if (target === 'https://i.redd.it/large.jpg') {
+      return new Response(new Uint8Array(201 * 1024), {
+        status: 200,
+        headers: { 'content-type': 'image/jpeg' },
+      });
+    }
+
+    if (target.includes('api.solapi.com/storage/v1/files')) {
+      storageCalls += 1;
+      return Response.json({ fileId: 'SHOULD_NOT_UPLOAD' });
+    }
+
+    if (target.includes('api.solapi.com/messages/v4/send-many/detail')) {
+      sentMessage = JSON.parse(init.body).messages[0];
+      return Response.json({
+        groupInfo: { groupId: 'GL', count: { registeredSuccess: 1, registeredFailed: 0 } },
+        failedMessageList: [],
+        messageList: [{ messageId: 'ML' }],
+      });
+    }
+
+    throw new Error('unexpected URL: ' + target);
+  };
+
+  try {
+    const result = await processEmailBridge(env, {
+      to: 'ijunu3343@gmail.com',
+      body: '이미지 r1결과',
+    });
+
+    assert.equal(result.mediaLinkSent, true);
+    assert.equal(result.attachmentSent, false);
+    assert.equal(storageCalls, 0);
+    assert.match(sentMessage.text, /https:\/\/i\.redd\.it\/large\.jpg/);
+  } finally {
+    globalThis.fetch = oldFetch;
+  }
+});
