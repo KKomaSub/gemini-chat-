@@ -1,4 +1,4 @@
-const DEFAULT_LIMIT = 20;
+const DEFAULT_LIMIT = 100;
 const REDDIT_MEDIA_HOSTS = new Set(['i.redd.it', 'preview.redd.it', 'external-preview.redd.it']);
 
 function decodeHtml(value = '') {
@@ -146,7 +146,7 @@ export function formatRedditSearchResults(results = [], allowMms = false) {
 }
 
 export async function searchReddit(env, query, limit = DEFAULT_LIMIT) {
-  const count = Math.max(1, Math.min(50, Number(limit) || DEFAULT_LIMIT));
+  const count = Math.max(1, Math.min(100, Number(limit) || DEFAULT_LIMIT));
   let results = [];
   try { results = await searchOAuth(env, query, count); } catch {}
   if (results.length) return results;
