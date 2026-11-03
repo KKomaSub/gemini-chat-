@@ -13,6 +13,7 @@ import {
 } from './emailBridge.js';
 import { askGeminiForEmail } from './geminiEmail.js';
 import { sendSolapiMessage, uploadMmsJpeg } from './solapi.js';
+import { publishGatewayTask } from './gatewayRelay.js';
 import {
   fetchRedditJpeg,
   formatRedditSearchResults,
@@ -149,6 +150,31 @@ async function processRedditCommand(env, command, allowMms) {
   if (!selected.hasAttachment) {
     return sendRedditNotice(env, `${command.index}번 결과에는 첨부파일이 없습니다.`);
   }
+  const gatewayUrl = String(selected.mediaUrl || selected.attachmentUrl || selected.permalink || '').trim();
+  if (gatewayUrl) {
+    try {
+      const queued = await publishGatewayTask(env, {
+        recipient: env.SOLAPI_TO,
+        text: `${command.index}번 ${sanitizeSolapiText(selected.title)}`,
+        mediaUrl: gatewayUrl,
+        permalink: String(selected.permalink || gatewayUrl),
+      });
+      return {
+        ok: true,
+        reddit: true,
+        command: 'attachment-gateway',
+        type: 'GATEWAY_MMS',
+        text: `${command.index}번 ${sanitizeSolapiText(selected.title)}`,
+        textBytes: solapiByteLength(`${command.index}번 ${sanitizeSolapiText(selected.title)}`),
+        attachmentSent: false,
+        gatewayQueued: true,
+        gatewayTaskId: queued.id,
+      };
+    } catch {
+      // Gateway APK/public key may not be ready yet. Keep the SOLAPI fallback below.
+    }
+  }
+
   if (selected.attachmentUrl) {
     try {
       const jpeg = await fetchRedditJpeg(selected.attachmentUrl);
