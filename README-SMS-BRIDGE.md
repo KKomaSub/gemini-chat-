@@ -65,13 +65,17 @@ Apps Script는 일반 첨부파일을 Base64로 전달합니다. 최대 10개, �
 - `검색어 r검색결과`
   - `<mms가능>` 없음: Reddit 검색 1번 결과 제목만 SMS 90byte 제한에 맞춰 전송
   - `<mms가능>` 있음: 검색된 결과 제목을 `1번`, `2번` 순서로 표시하고 각 결과의 `첨부파일: 있음/없음`도 표시
-  - 결과 목록이 2,000byte를 넘으면 여러 LMS로 나누어 제목을 계속 전송
+  - 결과 목록이 2,000byte를 넘으면 첫 2,000byte 구간까지만 1회 전송하며, 잘린 페이지 끝에는 `...`가 포함됩니다.
+- `검색어 r검색결과N`
+  - N은 페이지 번호이며 2 이상이면 앞 페이지에서 2,000byte로 잘린 바로 다음 내용부터 이어서 전송합니다.
+  - 각 요청마다 최대 2,000byte 한 페이지만 전송합니다.
 - `검색어 rN결과`
   - N은 1부터 시작
   - N번째 검색 결과에 Reddit 이미지 첨부가 있으면 Gemini를 거치지 않고 SOLAPI MMS로 직접 전송
-  - SOLAPI MMS 제한 때문에 실제 전송 파일은 200KB 이하 JPEG여야 합니다.
-  - Reddit preview 이미지를 우선 사용해 JPEG/용량 조건 충족률을 높입니다.
-  - 동영상, 지원되지 않는 파일 형식, 200KB 초과 등 직접 MMS 전송이 불가능하면 그 사실을 SMS로 알립니다.
+  - 200KB 이하 JPEG는 SOLAPI MMS 이미지 첨부로 직접 전송합니다.
+  - Reddit preview 이미지를 우선 사용해 직접 MMS 전송 성공률을 높입니다.
+  - 동영상, 200KB 초과 이미지, PNG/WebP 등 SOLAPI MMS 규격에 맞지 않는 첨부는 실제 미디어 URL 또는 Reddit 게시물 URL을 SMS/LMS로 전송합니다.
+  - SOLAPI 문자 MMS 자체는 JPG 200KB 이하만 지원하므로 동영상/대용량 파일을 MMS 바이너리 첨부로 보내지는 못합니다.
 
 Reddit API 정책상 공개 HTML 검색이 차단될 수 있으므로 안정적으로 사용하려면 Cloudflare에 `REDDIT_CLIENT_ID`와 `REDDIT_CLIENT_SECRET`을 Secret으로 설정하는 것을 권장합니다.
 
