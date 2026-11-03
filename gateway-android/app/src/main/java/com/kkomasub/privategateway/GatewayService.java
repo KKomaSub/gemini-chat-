@@ -124,7 +124,8 @@ public class GatewayService extends Service {
         if (recipient.isEmpty() || mediaUrl.isEmpty()) return;
 
         try {
-            int carrierLimit = MmsSender.maxMediaBytes(this);\n            MediaMemory.Item item = MediaMemory.downloadAndPrepare(mediaUrl, carrierLimit);
+            int carrierLimit = MmsSender.maxMediaBytes(this);
+            MediaMemory.Item item = MediaMemory.downloadAndPrepare(mediaUrl, carrierLimit);
             new Handler(Looper.getMainLooper()).post(() -> {
                 try {
                     MmsSender.sendMms(this, recipient, text, item.data, item.mime, item.name, permalink);
