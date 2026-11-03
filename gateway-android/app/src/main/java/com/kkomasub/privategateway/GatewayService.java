@@ -78,7 +78,7 @@ public class GatewayService extends Service {
         c.setConnectTimeout(12000);
         c.setReadTimeout(0);
         c.setRequestProperty("Accept", "application/x-ndjson");
-        c.setRequestProperty("User-Agent", "PrivateMmsGateway/1.0");
+        c.setRequestProperty("User-Agent", "PrivateMmsGateway/1.1");
 
         try (BufferedReader reader = new BufferedReader(
                 new InputStreamReader(c.getInputStream(), StandardCharsets.UTF_8))) {
@@ -124,7 +124,7 @@ public class GatewayService extends Service {
         if (recipient.isEmpty() || mediaUrl.isEmpty()) return;
 
         try {
-            MediaMemory.Item item = MediaMemory.downloadAndPrepare(mediaUrl);
+            int carrierLimit = MmsSender.maxMediaBytes(this);\n            MediaMemory.Item item = MediaMemory.downloadAndPrepare(mediaUrl, carrierLimit);
             new Handler(Looper.getMainLooper()).post(() -> {
                 try {
                     MmsSender.sendMms(this, recipient, text, item.data, item.mime, item.name, permalink);
