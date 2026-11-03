@@ -8,15 +8,13 @@ import android.os.Bundle;
 import android.telephony.SmsManager;
 import android.telephony.SubscriptionManager;
 
+import com.google.android.mms.MMSPart;
 import com.klinker.android.send_message.Settings;
 import com.klinker.android.send_message.Transaction;
 
-import java.lang.reflect.Array;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.List;
 
 final class MmsSender {
     private MmsSender() {}
@@ -83,61 +81,37 @@ final class MmsSender {
             settings.setSubscriptionId(subId);
         }
 
-        // Transaction constructor initializes the library's static settings used by getBytes().
+        // Initializes the library's static subscription/settings state used by getBytes().
         new Transaction(context.getApplicationContext(), settings);
 
-        Class<?> partClass = Class.forName("com.klinker.android.send_message.MMSPart");
-        Constructor<?> ctor = partClass.getDeclaredConstructor();
-        ctor.setAccessible(true);
+        List<MMSPart> parts = new ArrayList<>();
 
-        Object mediaPart = ctor.newInstance();
-        setField(partClass, mediaPart, "Name", fileName);
-        setField(partClass, mediaPart, "MimeType", mimeType);
-        setField(partClass, mediaPart, "Data", media);
+        MMSPart mediaPart = new MMSPart();
+        mediaPart.Name = fileName;
+        mediaPart.MimeType = mimeType;
+        mediaPart.Data = media;
+        parts.add(mediaPart);
 
-        int count = (text == null || text.isEmpty()) ? 1 : 2;
-        Object partArray = Array.newInstance(partClass, count);
-        Array.set(partArray, 0, mediaPart);
-
-        if (count == 2) {
-            Object textPart = ctor.newInstance();
-            setField(partClass, textPart, "Name", "text.txt");
-            setField(partClass, textPart, "MimeType", "text/plain");
-            setField(partClass, textPart, "Data", text.getBytes(StandardCharsets.UTF_8));
-            Array.set(partArray, 1, textPart);
+        if (text != null && !text.isEmpty()) {
+            MMSPart textPart = new MMSPart();
+            textPart.Name = "text.txt";
+            textPart.MimeType = "text/plain";
+            textPart.Data = text.getBytes(StandardCharsets.UTF_8);
+            parts.add(textPart);
         }
 
-        Method getBytes = Transaction.class.getDeclaredMethod(
-                "getBytes",
-                Context.class,
-                boolean.class,
-                String.class,
-                String[].class,
-                partArray.getClass(),
-                String.class
-        );
-        getBytes.setAccessible(true);
-        Object info = getBytes.invoke(
-                null,
+        Transaction.MessageInfo info = Transaction.getBytes(
                 context.getApplicationContext(),
                 false,
                 null,
                 new String[]{recipient},
-                partArray,
+                parts.toArray(new MMSPart[0]),
                 null
         );
-
-        Field bytesField = info.getClass().getField("bytes");
-        byte[] pdu = (byte[]) bytesField.get(info);
-        if (pdu == null || pdu.length == 0) throw new IllegalStateException("empty MMS PDU");
-        return pdu;
-    }
-
-    private static void setField(Class<?> type, Object target, String name, Object value)
-            throws Exception {
-        Field field = type.getDeclaredField(name);
-        field.setAccessible(true);
-        field.set(target, value);
+        if (info == null || info.bytes == null || info.bytes.length == 0) {
+            throw new IllegalStateException("empty MMS PDU");
+        }
+        return info.bytes;
     }
 
     private static SmsManager smsManager() {
