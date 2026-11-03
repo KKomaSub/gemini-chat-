@@ -21,24 +21,36 @@ import {
 } from './reddit.js';
 
 
-function splitRedditLines(lines, limit = LONG_LIMIT_BYTES) {
-  const chunks = [];
-  let current = '';
-
-  for (const rawLine of lines) {
-    const line = truncateSolapi(sanitizeSolapiText(rawLine), limit);
-    const candidate = current ? `${current}\n${line}` : line;
-
-    if (current && solapiByteLength(candidate) > limit) {
-      chunks.push(current);
-      current = line;
-    } else {
-      current = candidate;
-    }
+function takeSolapiBytes(text, limit) {
+  let out = '';
+  let used = 0;
+  for (const ch of String(text)) {
+    const n = ch.codePointAt(0) <= 0x7f ? 1 : 2;
+    if (used + n > limit) break;
+    out += ch;
+    used += n;
   }
+  return { text: out, chars: out.length };
+}
 
-  if (current) chunks.push(current);
-  return chunks;
+function paginateRedditText(text, limit = LONG_LIMIT_BYTES) {
+  let remaining = sanitizeSolapiText(text);
+  if (!remaining) return [];
+
+  if (solapiByteLength(remaining) <= limit) return [remaining];
+
+  const pages = [];
+  while (remaining) {
+    if (solapiByteLength(remaining) <= limit) {
+      pages.push(remaining);
+      break;
+    }
+
+    const part = takeSolapiBytes(remaining, Math.max(0, limit - 3));
+    pages.push(part.text.replace(/\s+$/u, '') + '...');
+    remaining = remaining.slice(part.chars).replace(/^\s+/u, '');
+  }
+  return pages;
 }
 
 async function sendRedditNotice(env, text) {
@@ -57,42 +69,46 @@ async function sendRedditNotice(env, text) {
 }
 
 async function processRedditCommand(env, command, allowMms) {
-  const requested = command.kind === 'attachment' ? command.index : (allowMms ? 100 : 1);
+  const requested = command.kind === 'attachment' ? command.index : 100;
   const results = await searchReddit(env, command.query, requested);
 
   if (command.kind === 'list') {
-    if (!allowMms) {
-      const firstTitle = formatRedditSearchResults(results, false);
-      return sendRedditNotice(env, firstTitle);
-    }
-
     if (!results.length) {
       return sendRedditNotice(env, 'Reddit 검색 결과가 없습니다.');
     }
 
-    const lines = results.map((result, index) =>
-      `${index + 1}번 ${String(result.title || '').trim()} (첨부파일: ${result.hasAttachment ? '있음' : '없음'})`
-    );
-    const chunks = splitRedditLines(lines, LONG_LIMIT_BYTES);
-    const deliveries = [];
-
-    for (const chunk of chunks) {
-      const bytes = solapiByteLength(chunk);
-      const type = bytes <= SMS_LIMIT_BYTES ? 'SMS' : 'LMS';
-      deliveries.push(await sendSolapiMessage(env, { type, text: chunk }));
+    if (!allowMms && !command.explicitPage) {
+      const firstTitle = formatRedditSearchResults(results, false);
+      return sendRedditNotice(env, firstTitle);
     }
+
+    const fullText = formatRedditSearchResults(results, true);
+    const pages = paginateRedditText(fullText, LONG_LIMIT_BYTES);
+    const page = Math.max(1, Number(command.page) || 1);
+    const selectedPage = pages[page - 1];
+
+    if (!selectedPage) {
+      return sendRedditNotice(env, `${page}페이지 Reddit 검색 결과가 없습니다.`);
+    }
+
+    const bytes = solapiByteLength(selectedPage);
+    const type = bytes <= SMS_LIMIT_BYTES ? 'SMS' : 'LMS';
+    const delivery = await sendSolapiMessage(env, { type, text: selectedPage });
 
     return {
       ok: true,
       reddit: true,
       command: 'search',
-      type: chunks.length === 1 && solapiByteLength(chunks[0]) <= SMS_LIMIT_BYTES ? 'SMS' : 'LMS',
-      text: chunks.join('\n'),
-      textBytes: chunks.reduce((sum, chunk) => sum + solapiByteLength(chunk), 0),
-      messageCount: chunks.length,
+      type,
+      text: selectedPage,
+      textBytes: bytes,
+      page,
+      totalPages: pages.length,
+      hasMore: page < pages.length,
+      messageCount: 1,
       attachmentSent: false,
-      solapiGroupId: deliveries[0]?.groupInfo?.groupId || deliveries[0]?.groupId || null,
-      solapiMessageId: deliveries[0]?.messageList?.[0]?.messageId || null,
+      solapiGroupId: delivery?.groupInfo?.groupId || delivery?.groupId || null,
+      solapiMessageId: delivery?.messageList?.[0]?.messageId || null,
     };
   }
 
