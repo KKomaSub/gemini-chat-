@@ -1,2 +1,3 @@
-// GitHub Actions의 private gateway 빌드가 RSA 공개키를 자동으로 채웁니다.
-export const GATEWAY_PUBLIC_KEY_B64 = '';
+// RSA SPKI public key used to encrypt gateway bootstrap data.
+// The private key is never committed; it exists only in the installable APK.
+export const GATEWAY_PUBLIC_KEY_B64 = 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwEKz5ujnhqTNYLY1oLZs3fyVRwkDzI7k3QPlYQNoZJQ7o3QH0xdA3SKvBOgHfMy2ptnKYhGmQnH8zWPFWp1CLX7oW5mOglMHh4x+2v8XfB3SSxBbWY4mX2pOrG8uWcjwKW0bFhKDeUrmQ2kWs1Z0cr4AnH0ExbTyBVP1V+jrEmuG0sa5A2ZlXyC3Y30w+zCkZpDbq+V7u9rL8Vjk3N4XbG+iFZ7M7Oj6hr4+6Rg97PLTaDg+fHq9Q3aMyjjSmRbIsJTEvgzW6I0SpDcKzjYgt1sIixN2HmtOubPqcmQesIcrHwTHHPiQFtQz3Zf4T3ukQwIDAQAB';
