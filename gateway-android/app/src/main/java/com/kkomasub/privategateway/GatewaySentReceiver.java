@@ -4,7 +4,7 @@ import android.app.Activity;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
-import java.io.File;
+import java.io.File;\nimport com.klinker.android.send_message.MmsSentReceiver;
 
 public class GatewaySentReceiver extends BroadcastReceiver {
     @Override public void onReceive(Context context, Intent intent) {
