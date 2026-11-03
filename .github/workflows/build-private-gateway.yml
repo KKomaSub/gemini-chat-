@@ -1,0 +1,98 @@
+name: Build Private MMS Gateway
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'gateway-android/**'
+      - '.github/workflows/build-private-gateway.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Install Android SDK 35
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Generate gateway encryption key
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p gateway-android/app/src/main/assets private-build
+          openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out private-build/gateway-private.pem
+          openssl pkcs8 -topk8 -inform PEM -outform DER -in private-build/gateway-private.pem -nocrypt             | base64 -w0 > gateway-android/app/src/main/assets/gateway_private_key.b64
+          PUB="$(openssl pkey -in private-build/gateway-private.pem -pubout -outform DER             | base64 -w0 | tr '+/' '-_' | tr -d '=')"
+          python3 - "$PUB" <<'PY'
+          import sys
+          from pathlib import Path
+          pub = sys.argv[1]
+          p = Path("functions/lib/gatewayPublicKey.js")
+          p.write_text(
+              "// Private gateway APK public key. The matching private key is embedded only in the encrypted APK artifact.\n"
+              f"export const GATEWAY_PUBLIC_KEY_B64 = '{pub}';\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Build APK
+        working-directory: gateway-android
+        run: gradle :app:assembleDebug --stacktrace
+
+      - name: Encrypt APK for private delivery
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > private-build/delivery-public.pem <<'PEM'
+          -----BEGIN PUBLIC KEY-----
+          MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAx4UAobdi6AxbBNbt4Bnu
+          Ub7HWDlmJ+YOCfei5i/ppXvgad2KCnWFaq8517Y+lt31ii+55nGzDCOycTYlAEcw
+          VydzMXCDf4LLjwhstILoWTKlFVryxLIsjfBFfO898f6BWCBx/TZt9AXCjnOs8Fgp
+          vaq+9vpYdrc10LJ6Ly2UC6j0Hx9LyKf8dQEa8j20CgeoPqtezSCXV5YIxRGCNb3o
+          Aq7UmX+MypmOavGHCWQAjrd6i+lnqTWNGIMznK1S0CAzwdgrR9RFF52LCNojx5CA
+          8gJoGCLwbRXaxUjrg6pK0hIpmc4K1Hsg8P7dYdGPCcKynKasMOZbqgQ9WA/VYDfj
+          pN7FT5tLjg4k8EcBJKw8E2jep+z80Ja+Qr/JdsaEV4mQShES+irEgOrnMYU/6dvY
+          Hrbd2Hoc4Bvl1Z8H4lmHWpHeC7qmBWLT/Q8hLdZ+8hUl1YT5eqbWHd2QlnmH2ehg
+          LO38lG4iXtVjeDrsyT3rmfEgjI3/JvV1geXPby/e0g2PAgMBAAE=
+          -----END PUBLIC KEY-----
+          PEM
+          openssl rand -hex 32 > private-build/aes.pass
+          openssl enc -aes-256-cbc -salt -pbkdf2 -iter 200000             -in gateway-android/app/build/outputs/apk/debug/app-debug.apk             -out private-build/PrivateMmsGateway.apk.enc             -pass file:private-build/aes.pass
+          openssl pkeyutl -encrypt -pubin -inkey private-build/delivery-public.pem             -in private-build/aes.pass             -out private-build/PrivateMmsGateway.key.enc             -pkeyopt rsa_padding_mode:oaep             -pkeyopt rsa_oaep_md:sha256
+
+      - name: Publish matching public key to main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add functions/lib/gatewayPublicKey.js
+          if ! git diff --cached --quiet; then
+            git commit -m "Rotate private gateway public key [skip ci]"
+            git push origin HEAD:main
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: private-mms-gateway-encrypted
+          path: |
+            private-build/PrivateMmsGateway.apk.enc
+            private-build/PrivateMmsGateway.key.enc
+          retention-days: 1
+          if-no-files-found: error
