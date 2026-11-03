@@ -165,7 +165,9 @@ async function searchHtml(env, query, limit) {
 export function parseRedditCommand(text = '') {
   const source = String(text).normalize('NFC').replace(/[\u200B-\u200D\u2060\uFEFF]/g, '').trim();
   let m = source.match(/^(.+?)\s+r검색결과$/u);
-  if (m && m[1].trim()) return { kind: 'list', query: m[1].trim() };
+  if (m && m[1].trim()) return { kind: 'list', query: m[1].trim(), page: 1, explicitPage: false };
+  m = source.match(/^(.+?)\s+r검색결과([1-9]\d*)$/u);
+  if (m && m[1].trim()) return { kind: 'list', query: m[1].trim(), page: Number(m[2]), explicitPage: true };
   m = source.match(/^(.+?)\s+r([1-9]\d*)결과$/u);
   if (m && m[1].trim()) return { kind: 'attachment', query: m[1].trim(), index: Number(m[2]) };
   return null;
