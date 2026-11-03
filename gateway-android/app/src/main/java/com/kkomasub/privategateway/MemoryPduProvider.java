@@ -8,7 +8,7 @@ import android.os.Binder;
 import android.os.ParcelFileDescriptor;
 import android.os.Process;
 
-import java.io.IOException;
+import java.io.FileNotFoundException;\nimport java.io.IOException;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -38,7 +38,7 @@ public final class MemoryPduProvider extends ContentProvider {
     @Override public boolean onCreate() { return true; }
 
     @Override
-    public ParcelFileDescriptor openFile(Uri uri, String mode) throws IOException {
+    public ParcelFileDescriptor openFile(Uri uri, String mode) throws FileNotFoundException {
         if (!"r".equals(mode)) throw new SecurityException("read only");
         ensureAllowedCaller();
 
@@ -49,7 +49,14 @@ public final class MemoryPduProvider extends ContentProvider {
             throw new java.io.FileNotFoundException("expired");
         }
 
-        ParcelFileDescriptor[] pipe = ParcelFileDescriptor.createPipe();
+        final ParcelFileDescriptor[] pipe;
+        try {
+            pipe = ParcelFileDescriptor.createPipe();
+        } catch (IOException error) {
+            FileNotFoundException wrapped = new FileNotFoundException("pipe unavailable");
+            wrapped.initCause(error);
+            throw wrapped;
+        }
         new Thread(() -> {
             try (ParcelFileDescriptor.AutoCloseOutputStream out =
                          new ParcelFileDescriptor.AutoCloseOutputStream(pipe[1])) {
