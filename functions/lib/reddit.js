@@ -21,6 +21,36 @@ function isRedditMediaUrl(value = '') {
   catch { return false; }
 }
 
+function preferJpegPreview(value = '') {
+  const url = safeUrl(value);
+  if (!url) return '';
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname.toLowerCase().endsWith('redd.it') && parsed.hostname.toLowerCase().includes('preview')) {
+      parsed.searchParams.set('format', 'pjpg');
+      parsed.searchParams.delete('auto');
+      return parsed.toString();
+    }
+  } catch {}
+  return url;
+}
+
+function mediumPreview(image = {}) {
+  const resolutions = Array.isArray(image?.resolutions) ? image.resolutions : [];
+  const preferred = resolutions
+    .filter((item) => Number(item?.width || 0) <= 720)
+    .sort((a, b) => Number(b?.width || 0) - Number(a?.width || 0))[0];
+  return preferJpegPreview(preferred?.url || image?.source?.url || '');
+}
+
+function galleryPreview(meta = {}) {
+  const previews = Array.isArray(meta?.p) ? meta.p : [];
+  const preferred = previews
+    .filter((item) => Number(item?.x || 0) <= 720)
+    .sort((a, b) => Number(b?.x || 0) - Number(a?.x || 0))[0];
+  return preferJpegPreview(preferred?.u || meta?.s?.u || '');
+}
+
 function findRedditImage(post = {}) {
   const candidates = [];
   if (post.is_gallery && post.media_metadata) {
@@ -29,10 +59,12 @@ function findRedditImage(post = {}) {
       : Object.keys(post.media_metadata);
     for (const id of ids) {
       const meta = post.media_metadata[id];
-      if (meta?.s?.u) candidates.push(meta.s.u);
+      const preview = galleryPreview(meta);
+      if (preview) candidates.push(preview);
     }
   }
-  if (post.preview?.images?.[0]?.source?.url) candidates.push(post.preview.images[0].source.url);
+  const preview = mediumPreview(post.preview?.images?.[0] || {});
+  if (preview) candidates.push(preview);
   if (post.url_overridden_by_dest) candidates.push(post.url_overridden_by_dest);
   if (post.url) candidates.push(post.url);
 
@@ -73,7 +105,7 @@ function parseSearchHtml(html = '', limit = DEFAULT_LIMIT) {
     const permalinkRaw = attr(tag, 'permalink') || attr(tag, 'href');
     const contentHref = attr(tag, 'content-href');
     const postType = attr(tag, 'post-type').toLowerCase();
-    const attachmentUrl = isRedditMediaUrl(contentHref) ? safeUrl(contentHref) : '';
+    const attachmentUrl = isRedditMediaUrl(contentHref) ? preferJpegPreview(contentHref) : '';
     const hasAttachment = Boolean(attachmentUrl || /image|video|gallery|media/.test(postType));
     const permalink = permalinkRaw
       ? (permalinkRaw.startsWith('http') ? permalinkRaw : `https://www.reddit.com${permalinkRaw}`)
