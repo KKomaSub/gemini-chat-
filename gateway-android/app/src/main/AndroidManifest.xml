@@ -27,7 +27,7 @@
                 <data android:scheme="mmsto" />
             </intent-filter>
         </activity>
-        <service android:name=".GatewayService" android:exported="false" android:foregroundServiceType="dataSync" />
+        <service android:name=".GatewayService" android:exported="false" />
         <service android:name=".RespondService" android:permission="android.permission.SEND_RESPOND_VIA_MESSAGE" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.RESPOND_VIA_MESSAGE" />
@@ -47,7 +47,7 @@
                 <data android:mimeType="application/vnd.wap.mms-message" />
             </intent-filter>
         </receiver>
-        <receiver android:name=".BootReceiver" android:exported="false">
+        <receiver android:name=".GatewaySentReceiver" android:exported="false" />\n        <receiver android:name=".BootReceiver" android:exported="false">
             <intent-filter><action android:name="android.intent.action.BOOT_COMPLETED" /></intent-filter>
         </receiver>
     </application>
