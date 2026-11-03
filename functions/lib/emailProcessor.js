@@ -68,6 +68,35 @@ async function sendRedditNotice(env, text) {
   };
 }
 
+async function sendRedditMediaLink(env, selected, index) {
+  const url = String(selected?.mediaUrl || selected?.attachmentUrl || selected?.permalink || '').trim();
+  if (!url) {
+    return sendRedditNotice(env, `${index}번 첨부파일 링크를 찾지 못했습니다.`);
+  }
+
+  const title = sanitizeSolapiText(selected?.title || '');
+  const text = truncateSolapi(
+    `${index}번 ${title}\n${url}`,
+    LONG_LIMIT_BYTES
+  );
+  const bytes = solapiByteLength(text);
+  const type = bytes <= SMS_LIMIT_BYTES ? 'SMS' : 'LMS';
+  const delivery = await sendSolapiMessage(env, { type, text });
+
+  return {
+    ok: true,
+    reddit: true,
+    command: 'attachment-link',
+    type,
+    text,
+    textBytes: bytes,
+    attachmentSent: false,
+    mediaLinkSent: true,
+    solapiGroupId: delivery?.groupInfo?.groupId || delivery?.groupId || null,
+    solapiMessageId: delivery?.messageList?.[0]?.messageId || null,
+  };
+}
+
 async function processRedditCommand(env, command, allowMms) {
   const requested = command.kind === 'attachment' ? command.index : 100;
   const results = await searchReddit(env, command.query, requested);
@@ -120,47 +149,43 @@ async function processRedditCommand(env, command, allowMms) {
   if (!selected.hasAttachment) {
     return sendRedditNotice(env, `${command.index}번 결과에는 첨부파일이 없습니다.`);
   }
-  if (!selected.attachmentUrl) {
-    return sendRedditNotice(
-      env,
-      `${command.index}번 첨부파일은 MMS로 직접 전송할 수 없는 형식입니다.`
-    );
+  if (selected.attachmentUrl) {
+    try {
+      const jpeg = await fetchRedditJpeg(selected.attachmentUrl);
+      const imageId = await uploadMmsJpeg(
+        env,
+        jpeg.dataBase64,
+        `reddit-${command.index}.jpg`
+      );
+      const text = truncateSolapi(
+        `${command.index}번 ${sanitizeSolapiText(selected.title)}`,
+        LONG_LIMIT_BYTES
+      );
+      const delivery = await sendSolapiMessage(env, {
+        type: 'MMS',
+        text,
+        imageId,
+      });
+
+      return {
+        ok: true,
+        reddit: true,
+        command: 'attachment',
+        type: 'MMS',
+        text,
+        textBytes: solapiByteLength(text),
+        attachmentSent: true,
+        mediaLinkSent: false,
+        solapiGroupId: delivery?.groupInfo?.groupId || delivery?.groupId || null,
+        solapiMessageId: delivery?.messageList?.[0]?.messageId || null,
+      };
+    } catch {
+      // SOLAPI MMS only accepts a JPEG up to 200KB. Large/non-JPEG
+      // media falls back to a directly usable Reddit media/post link.
+    }
   }
 
-  try {
-    const jpeg = await fetchRedditJpeg(selected.attachmentUrl);
-    const imageId = await uploadMmsJpeg(
-      env,
-      jpeg.dataBase64,
-      `reddit-${command.index}.jpg`
-    );
-    const text = truncateSolapi(
-      `${command.index}번 ${sanitizeSolapiText(selected.title)}`,
-      LONG_LIMIT_BYTES
-    );
-    const delivery = await sendSolapiMessage(env, {
-      type: 'MMS',
-      text,
-      imageId,
-    });
-
-    return {
-      ok: true,
-      reddit: true,
-      command: 'attachment',
-      type: 'MMS',
-      text,
-      textBytes: solapiByteLength(text),
-      attachmentSent: true,
-      solapiGroupId: delivery?.groupInfo?.groupId || delivery?.groupId || null,
-      solapiMessageId: delivery?.messageList?.[0]?.messageId || null,
-    };
-  } catch {
-    return sendRedditNotice(
-      env,
-      `${command.index}번 첨부파일은 MMS로 직접 전송할 수 없습니다.`
-    );
-  }
+  return sendRedditMediaLink(env, selected, command.index);
 }
 
 export async function processEmailBridge(env, raw) {
