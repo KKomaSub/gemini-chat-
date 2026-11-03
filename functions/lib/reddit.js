@@ -77,6 +77,13 @@ function findRedditImage(post = {}) {
 
 function normalizeApiPost(post = {}) {
   const attachmentUrl = findRedditImage(post);
+  const permalink = post.permalink ? `https://www.reddit.com${post.permalink}` : '';
+  const videoUrl = safeUrl(
+    post.secure_media?.reddit_video?.fallback_url ||
+    post.media?.reddit_video?.fallback_url ||
+    ''
+  );
+  const contentUrl = safeUrl(post.url_overridden_by_dest || post.url || '');
   const hasAttachment = Boolean(
     attachmentUrl || post.is_gallery || post.post_hint === 'image' ||
     post.post_hint === 'hosted:video' || post.post_hint === 'rich:video' ||
@@ -84,9 +91,10 @@ function normalizeApiPost(post = {}) {
   );
   return {
     title: String(post.title || '').trim(),
-    permalink: post.permalink ? `https://www.reddit.com${post.permalink}` : '',
+    permalink,
     hasAttachment,
     attachmentUrl,
+    mediaUrl: videoUrl || attachmentUrl || contentUrl || permalink,
   };
 }
 
@@ -110,7 +118,8 @@ function parseSearchHtml(html = '', limit = DEFAULT_LIMIT) {
     const permalink = permalinkRaw
       ? (permalinkRaw.startsWith('http') ? permalinkRaw : `https://www.reddit.com${permalinkRaw}`)
       : '';
-    out.push({ title: title.trim(), permalink, hasAttachment, attachmentUrl });
+    const mediaUrl = safeUrl(contentHref) || attachmentUrl || permalink;
+    out.push({ title: title.trim(), permalink, hasAttachment, attachmentUrl, mediaUrl });
     if (out.length >= limit) break;
   }
   return out;
