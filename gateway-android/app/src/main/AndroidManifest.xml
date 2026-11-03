@@ -6,7 +6,6 @@
     <uses-permission android:name="android.permission.SEND_SMS" />
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
     <uses-permission android:name="android.permission.RECEIVE_MMS" />
-    <uses-permission android:name="android.permission.WRITE_SMS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 
@@ -33,6 +32,12 @@
         </activity>
 
         <service android:name=".GatewayService" android:exported="false" />
+
+        <provider
+            android:name=".MemoryPduProvider"
+            android:authorities="com.kkomasub.privategateway.pdu"
+            android:exported="true"
+            android:grantUriPermissions="true" />
 
         <service
             android:name=".RespondService"
