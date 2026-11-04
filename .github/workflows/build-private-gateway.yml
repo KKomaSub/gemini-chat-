@@ -1,11 +1,7 @@
 name: Build Private MMS Gateway
 
+# Legacy Android gateway is retired. Keep manual diagnostics only.
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'gateway-android/**'
-      - '.github/workflows/build-private-gateway.yml'
   workflow_dispatch:
 
 permissions:
