@@ -40,10 +40,10 @@ test('Reddit command parser recognizes list and numbered attachment commands', (
 test('MMS-list formatter numbers every result and reports attachment presence', () => {
   assert.equal(
     formatRedditSearchResults([
-      { title: '첫 번째', hasAttachment: true },
-      { title: '두 번째', hasAttachment: false },
+      { title: '첫 번째', hasImage: true },
+      { title: '두 번째', hasImage: false },
     ], true),
-    '1번 첫 번째 (첨부파일: 있음)\n2번 두 번째 (첨부파일: 없음)'
+    '1번 첫 번째 (이미지: 있음)\n2번 두 번째 (이미지: 없음)'
   );
 });
 
@@ -126,8 +126,8 @@ test('r검색결과 with <mms가능> sends only the first <=2000-byte page', asy
 
     assert.equal(sentTexts.length, 1);
     const combined = sentTexts[0];
-    assert.match(combined, /1번 첫 번째 \(첨부파일: 있음\)/);
-    assert.match(combined, /2번 두 번째 \(첨부파일: 없음\)/);
+    assert.match(combined, /1번 첫 번째 \(이미지: 있음\)/);
+    assert.match(combined, /2번 두 번째 \(이미지: 없음\)/);
     assert.ok(result.textBytes <= 2000);
     assert.equal(result.messageCount, 1);
     assert.equal(result.reddit, true);
@@ -284,20 +284,19 @@ test('r검색결과 does not automatically send continuation pages over 2000 byt
 });
 
 
-test('rN결과 sends a Reddit video URL when MMS cannot attach video', async () => {
-  let sentMessage;
+test('video search result has no image and sends no gateway/media link', async () => {
   const oldFetch = globalThis.fetch;
-
+  const urls = [];
+  let sentMessage;
   globalThis.fetch = async (url, init = {}) => {
     const target = String(url);
-
+    urls.push(target);
     if (target.startsWith('https://www.reddit.com/search/')) {
       return new Response(
         '<shreddit-post post-title="동영상 결과" post-type="video" content-href="https://v.redd.it/video123" permalink="/r/test/video"></shreddit-post>',
         { status: 200, headers: { 'content-type': 'text/html' } }
       );
     }
-
     if (target.includes('api.solapi.com/messages/v4/send-many/detail')) {
       sentMessage = JSON.parse(init.body).messages[0];
       return Response.json({
@@ -306,52 +305,51 @@ test('rN결과 sends a Reddit video URL when MMS cannot attach video', async () 
         messageList: [{ messageId: 'MV' }],
       });
     }
-
     throw new Error('unexpected URL: ' + target);
   };
-
   try {
     const result = await processEmailBridge(env, {
       to: 'ijunu3343@gmail.com',
       body: '동영상 r1결과',
     });
-
     assert.equal(result.reddit, true);
-    assert.equal(result.mediaLinkSent, true);
+    assert.equal(result.type, 'SMS');
     assert.equal(result.attachmentSent, false);
-    assert.match(sentMessage.text, /https:\/\/v\.redd\.it\/video123/);
+    assert.equal(sentMessage.text, '1번 결과에는 이미지가 없습니다.');
+    assert.equal(urls.some((u) => /gateway|generativelanguage|v\.redd\.it/.test(u)), false);
   } finally {
     globalThis.fetch = oldFetch;
   }
 });
 
-test('rN결과 falls back to media link when Reddit JPEG is over 200KB', async () => {
+test('oversized Reddit JPG is fetched again as a smaller preview and sent as MMS', async () => {
   let sentMessage;
-  let storageCalls = 0;
+  let storageBody;
   const oldFetch = globalThis.fetch;
-
+  const large = new Uint8Array(201 * 1024);
+  large.set([255, 216], 0);
+  large.set([255, 217], large.length - 2);
+  const small = new Uint8Array([255, 216, 255, 217]);
+  const urls = [];
   globalThis.fetch = async (url, init = {}) => {
     const target = String(url);
-
+    urls.push(target);
     if (target.startsWith('https://www.reddit.com/search/')) {
       return new Response(
         '<shreddit-post post-title="대용량 이미지" post-type="image" content-href="https://i.redd.it/large.jpg" permalink="/r/test/large"></shreddit-post>',
         { status: 200, headers: { 'content-type': 'text/html' } }
       );
     }
-
     if (target === 'https://i.redd.it/large.jpg') {
-      return new Response(new Uint8Array(201 * 1024), {
-        status: 200,
-        headers: { 'content-type': 'image/jpeg' },
-      });
+      return new Response(large, { status: 200, headers: { 'content-type': 'image/jpeg' } });
     }
-
+    if (target.startsWith('https://preview.redd.it/large.jpg')) {
+      return new Response(small, { status: 200, headers: { 'content-type': 'image/jpeg' } });
+    }
     if (target.includes('api.solapi.com/storage/v1/files')) {
-      storageCalls += 1;
-      return Response.json({ fileId: 'SHOULD_NOT_UPLOAD' });
+      storageBody = JSON.parse(init.body);
+      return Response.json({ fileId: 'SMALL_JPG' });
     }
-
     if (target.includes('api.solapi.com/messages/v4/send-many/detail')) {
       sentMessage = JSON.parse(init.body).messages[0];
       return Response.json({
@@ -360,20 +358,110 @@ test('rN결과 falls back to media link when Reddit JPEG is over 200KB', async (
         messageList: [{ messageId: 'ML' }],
       });
     }
-
     throw new Error('unexpected URL: ' + target);
   };
-
   try {
     const result = await processEmailBridge(env, {
       to: 'ijunu3343@gmail.com',
       body: '이미지 r1결과',
     });
+    assert.equal(result.type, 'MMS');
+    assert.equal(result.attachmentSent, true);
+    assert.equal(sentMessage.imageId, 'SMALL_JPG');
+    assert.equal(storageBody.type, 'MMS');
+    assert.match(storageBody.file, /\/9j/);
+    assert.ok(urls.some(u => u.includes('preview.redd.it/large.jpg')));
+    assert.equal(urls.some(u => /gateway|generativelanguage/.test(u)), false);
+  } finally {
+    globalThis.fetch = oldFetch;
+  }
+});
 
-    assert.equal(result.mediaLinkSent, true);
-    assert.equal(result.attachmentSent, false);
-    assert.equal(storageCalls, 0);
-    assert.match(sentMessage.text, /https:\/\/i\.redd\.it\/large\.jpg/);
+test('PNG Reddit image uses JPEG preview and never uploads PNG', async () => {
+  const oldFetch = globalThis.fetch;
+  let uploaded;
+  const calls = [];
+  globalThis.fetch = async (url, init = {}) => {
+    const target = String(url);
+    calls.push(target);
+    if (target.startsWith('https://www.reddit.com/search/')) {
+      return new Response(
+        '<shreddit-post post-title="PNG 이미지" post-type="image" content-href="https://i.redd.it/picture.png"></shreddit-post>',
+        { status: 200, headers: { 'content-type': 'text/html' } }
+      );
+    }
+    if (target.startsWith('https://preview.redd.it/picture.png')) {
+      return new Response(new Uint8Array([255, 216, 255, 217]), {
+        status: 200, headers: { 'content-type': 'image/jpeg' },
+      });
+    }
+    if (target.includes('api.solapi.com/storage/v1/files')) {
+      uploaded = JSON.parse(init.body);
+      return Response.json({ fileId: 'PNG_TO_JPG' });
+    }
+    if (target.includes('api.solapi.com/messages/v4/send-many/detail')) {
+      return Response.json({
+        groupInfo: { groupId: 'G', count: { registeredSuccess: 1, registeredFailed: 0 } },
+        failedMessageList: [],
+        messageList: [{ messageId: 'M' }],
+      });
+    }
+    throw new Error('unexpected URL: ' + target);
+  };
+  try {
+    const result = await processEmailBridge(env, {
+      to: 'ijunu3343@gmail.com',
+      body: '그림 r1결과',
+    });
+    assert.equal(result.type, 'MMS');
+    assert.equal(result.attachmentSent, true);
+    assert.equal(uploaded.type, 'MMS');
+    assert.ok(uploaded.name.endsWith('.jpg'));
+    assert.ok(!calls.includes('https://i.redd.it/picture.png'));
+  } finally {
+    globalThis.fetch = oldFetch;
+  }
+});
+
+test('image conversion fails without ever sending video or file links', async () => {
+  const oldFetch = globalThis.fetch;
+  let sentMessage;
+  let uploads = 0;
+  globalThis.fetch = async (url, init = {}) => {
+    const target = String(url);
+    if (target.startsWith('https://www.reddit.com/search/')) {
+      return new Response(
+        '<shreddit-post post-title="이미지" post-type="image" content-href="https://i.redd.it/im.jpg"></shreddit-post>',
+        { status: 200, headers: { 'content-type': 'text/html' } }
+      );
+    }
+    if (target.startsWith('https://i.redd.it/') || target.startsWith('https://preview.redd.it/')) {
+      return new Response('not a real jpg', {
+        status: 200, headers: { 'content-type': 'image/jpeg' },
+      });
+    }
+    if (target.includes('api.solapi.com/storage/v1/files')) {
+      uploads += 1;
+      return Response.json({ fileId: 'should-not-happen' });
+    }
+    if (target.includes('api.solapi.com/messages/v4/send-many/detail')) {
+      sentMessage = JSON.parse(init.body).messages[0];
+      return Response.json({
+        groupInfo: { groupId: 'G', count: { registeredSuccess: 1, registeredFailed: 0 } },
+        failedMessageList: [],
+        messageList: [{ messageId: 'M' }],
+      });
+    }
+    throw new Error('unexpected URL: ' + target);
+  };
+  try {
+    const result = await processEmailBridge(env, {
+      to: 'ijunu3343@gmail.com', body: '이미지 r1결과',
+    });
+    assert.equal(result.type, 'SMS');
+    assert.equal(uploads, 0);
+    assert.match(sentMessage.text, /200KB 이하 JPG/);
+    assert.ok(!sentMessage.text.includes('http'));
   } finally {
     globalThis.fetch = oldFetch;
   }
