@@ -1,0 +1,30 @@
+name: Verify Gmail Reddit SMS bridge
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'functions/**'
+      - 'tests/**'
+      - 'package.json'
+      - '.github/workflows/verify-reddit-bridge.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check JavaScript syntax
+        run: |
+          node --check functions/lib/reddit.js
+          node --check functions/lib/emailProcessor.js
+          node --check tests/reddit-command.test.mjs
+      - name: Run all unit and integration tests
+        run: npm test
