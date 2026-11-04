@@ -140,8 +140,7 @@ public class GatewayService extends Service {
 
     private void sendFallback(String recipient, String text, String url) {
         try {
-            String body = (text == null || text.isEmpty() ? "" : text + "\n") + url;
-            MmsSender.sendSms(this, recipient, body);
+            MmsSender.sendSms(this, recipient, "이미지 MMS 전송에 실패했습니다.");
         } catch (Throwable ignored) {}
     }
 
