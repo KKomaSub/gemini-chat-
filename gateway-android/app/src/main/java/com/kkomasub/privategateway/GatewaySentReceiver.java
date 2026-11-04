@@ -10,16 +10,11 @@ public class GatewaySentReceiver extends BroadcastReceiver {
         if (getResultCode() == Activity.RESULT_OK) return;
 
         String recipient = intent.getStringExtra("gateway_recipient");
-        String text = intent.getStringExtra("gateway_text");
-        String fallback = intent.getStringExtra("gateway_fallback_url");
-
-        if (recipient == null || recipient.isEmpty() || fallback == null || fallback.isEmpty()) return;
-
+        if (recipient == null || recipient.isEmpty()) return;
         try {
-            String body = (text == null || text.isEmpty() ? "" : text + "\n") + fallback;
-            MmsSender.sendSms(context, recipient, body);
+            MmsSender.sendSms(context, recipient, "이미지 MMS 전송에 실패했습니다.");
         } catch (Throwable ignored) {
-            // Intentionally no logs containing message content.
+            // Intentionally do not log private message contents.
         }
     }
 }
