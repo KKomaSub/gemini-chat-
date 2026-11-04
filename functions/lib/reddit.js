@@ -17,8 +17,19 @@ function safeUrl(value = '') {
 }
 
 function isRedditMediaUrl(value = '') {
-  try { return REDDIT_MEDIA_HOSTS.has(new URL(value).hostname.toLowerCase()); }
-  catch { return false; }
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === 'https:' &&
+      REDDIT_MEDIA_HOSTS.has(parsed.hostname.toLowerCase());
+  } catch { return false; }
+}
+
+function isImageUrl(value = '') {
+  try {
+    const parsed = new URL(value);
+    return isRedditMediaUrl(value) &&
+      /\.(jpe?g|png|webp|gif)$/i.test(parsed.pathname);
+  } catch { return false; }
 }
 
 function preferJpegPreview(value = '') {
@@ -76,25 +87,22 @@ function findRedditImage(post = {}) {
 }
 
 function normalizeApiPost(post = {}) {
-  const attachmentUrl = findRedditImage(post);
-  const permalink = post.permalink ? `https://www.reddit.com${post.permalink}` : '';
-  const videoUrl = safeUrl(
-    post.secure_media?.reddit_video?.fallback_url ||
-    post.media?.reddit_video?.fallback_url ||
-    ''
+  const video = Boolean(
+    post.is_video || post.secure_media?.reddit_video ||
+    post.media?.reddit_video ||
+    ['hosted:video', 'rich:video'].includes(post.post_hint)
   );
-  const contentUrl = safeUrl(post.url_overridden_by_dest || post.url || '');
-  const hasAttachment = Boolean(
-    attachmentUrl || post.is_gallery || post.post_hint === 'image' ||
-    post.post_hint === 'hosted:video' || post.post_hint === 'rich:video' ||
-    post.secure_media?.reddit_video || post.media?.reddit_video
+  const original = safeUrl(post.url_overridden_by_dest || post.url || '');
+  const attachmentUrl = video ? '' : findRedditImage(post);
+  const hasImage = !video && Boolean(
+    post.is_gallery || post.post_hint === 'image' ||
+    isImageUrl(original)
   );
   return {
     title: String(post.title || '').trim(),
-    permalink,
-    hasAttachment,
-    attachmentUrl,
-    mediaUrl: videoUrl || contentUrl || attachmentUrl || permalink,
+    permalink: post.permalink ? `https://www.reddit.com${post.permalink}` : '',
+    hasImage,
+    attachmentUrl: hasImage ? attachmentUrl : '',
   };
 }
 
@@ -113,13 +121,15 @@ function parseSearchHtml(html = '', limit = DEFAULT_LIMIT) {
     const permalinkRaw = attr(tag, 'permalink') || attr(tag, 'href');
     const contentHref = attr(tag, 'content-href');
     const postType = attr(tag, 'post-type').toLowerCase();
-    const attachmentUrl = isRedditMediaUrl(contentHref) ? preferJpegPreview(contentHref) : '';
-    const hasAttachment = Boolean(attachmentUrl || /image|video|gallery|media/.test(postType));
+    const video = /video/.test(postType) || /v\.redd\.it/i.test(contentHref);
+    const hasImage = !video &&
+      (/image|gallery/.test(postType) || isImageUrl(contentHref));
+    const attachmentUrl = hasImage && isImageUrl(contentHref)
+      ? preferJpegPreview(contentHref) : '';
     const permalink = permalinkRaw
       ? (permalinkRaw.startsWith('http') ? permalinkRaw : `https://www.reddit.com${permalinkRaw}`)
       : '';
-    const mediaUrl = safeUrl(contentHref) || attachmentUrl || permalink;
-    out.push({ title: title.trim(), permalink, hasAttachment, attachmentUrl, mediaUrl });
+    out.push({ title: title.trim(), permalink, hasImage, attachmentUrl });
     if (out.length >= limit) break;
   }
   return out;
@@ -185,7 +195,7 @@ export function parseRedditCommand(text = '') {
 export function formatRedditSearchResults(results = [], allowMms = false) {
   if (!results.length) return 'Reddit 검색 결과가 없습니다.';
   if (!allowMms) return String(results[0]?.title || '').trim() || 'Reddit 검색 결과가 없습니다.';
-  return results.map((r, i) => `${i + 1}번 ${String(r.title || '').trim()} (첨부파일: ${r.hasAttachment ? '있음' : '없음'})`).join('\n');
+  return results.map((r, i) => `${i + 1}번 ${String(r.title || '').trim()} (이미지: ${r.hasImage ? '있음' : '없음'})`).join('\n');
 }
 
 export async function searchReddit(env, query, limit = DEFAULT_LIMIT) {
@@ -197,16 +207,114 @@ export async function searchReddit(env, query, limit = DEFAULT_LIMIT) {
   return results;
 }
 
-export async function fetchRedditJpeg(url) {
-  if (!isRedditMediaUrl(url)) throw new Error('Reddit attachment URL is not an approved Reddit media host');
-  const response = await fetch(url, { headers: { accept: 'image/jpeg,image/*;q=0.8' } });
-  if (!response.ok) throw new Error(`Reddit attachment HTTP ${response.status}`);
-  const type = String(response.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
-  const bytes = new Uint8Array(await response.arrayBuffer());
-  if (bytes.byteLength > 200 * 1024) throw new Error('Reddit attachment is larger than 200KB');
-  if (type !== 'image/jpeg' && type !== 'image/jpg') throw new Error(`Reddit attachment is not JPEG (${type || 'unknown'})`);
+const MAX_JPEG_BYTES = 200 * 1024;
+
+function jpegCandidateUrls(rawUrl) {
+  const original = safeUrl(rawUrl);
+  if (!isImageUrl(original)) throw new Error('Unsupported Reddit image URL');
+
+  const url = new URL(original);
+  const candidates = [];
+  const add = (candidate) => {
+    if (isImageUrl(candidate) && !candidates.includes(candidate)) candidates.push(candidate);
+  };
+  const isPreview = url.hostname !== 'i.redd.it';
+  const imageIsJpeg = /\.jpe?g$/i.test(url.pathname);
+
+  if (imageIsJpeg || isPreview) add(original);
+
+  const preview = new URL(original);
+  if (preview.hostname === 'i.redd.it') preview.hostname = 'preview.redd.it';
+  for (const width of [640, 480, 320, 240, 160, 96]) {
+    const variant = new URL(preview);
+    variant.searchParams.set('width', String(width));
+    variant.searchParams.set('format', 'pjpg');
+    variant.searchParams.delete('auto');
+    // A signature for a different image transformation would no longer match.
+    variant.searchParams.delete('s');
+    add(variant.toString());
+  }
+  add(original);
+  return candidates;
+}
+
+async function limitedJpegBytes(response) {
+  if (!response.ok) return null;
+  const type = String(response.headers.get('content-type') || '')
+    .split(';')[0].trim().toLowerCase();
+  if (!['image/jpeg', 'image/jpg'].includes(type)) return null;
+  const length = Number(response.headers.get('content-length') || 0);
+  if (length > MAX_JPEG_BYTES) return null;
+
+  const reader = response.body?.getReader();
+  let data;
+  if (!reader) {
+    data = new Uint8Array(await response.arrayBuffer());
+  } else {
+    const chunks = [];
+    let total = 0;
+    try {
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        total += value.byteLength;
+        if (total > MAX_JPEG_BYTES) return null;
+        chunks.push(value);
+      }
+    } finally {
+      try { await reader.cancel(); } catch {}
+    }
+    data = new Uint8Array(total);
+    let offset = 0;
+    for (const part of chunks) { data.set(part, offset); offset += part.length; }
+  }
+  if (data.length < 4 || data.length > MAX_JPEG_BYTES ||
+      data[0] !== 0xff || data[1] !== 0xd8 ||
+      data[data.length - 2] !== 0xff || data[data.length - 1] !== 0xd9) {
+    return null;
+  }
+  return data;
+}
+
+function toBase64(bytes) {
   let binary = '';
-  const chunk = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunk) binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
-  return { dataBase64: btoa(binary), mimeType: 'image/jpeg', size: bytes.byteLength };
+  const size = 0x8000;
+  for (let i = 0; i < bytes.length; i += size) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + size));
+  }
+  return btoa(binary);
+}
+
+export async function fetchRedditJpeg(rawUrl) {
+  const candidates = jpegCandidateUrls(rawUrl);
+  for (const url of candidates) {
+    try {
+      const response = await fetch(url, {
+        headers: { accept: 'image/jpeg,image/*;q=0.8' },
+      });
+      const data = await limitedJpegBytes(response);
+      if (data) {
+        return { dataBase64: toBase64(data), mimeType: 'image/jpeg', size: data.length };
+      }
+    } catch {
+      // Try a smaller Reddit JPEG preview.
+    }
+  }
+
+  // Cloudflare image transformations provide another JPG resize path where enabled.
+  for (const width of [480, 320, 160]) {
+    try {
+      const response = await fetch(candidates[0], {
+        cf: { image: { width, fit: 'scale-down', format: 'jpeg', quality: 65 } },
+        headers: { accept: 'image/jpeg' },
+      });
+      const data = await limitedJpegBytes(response);
+      if (data) {
+        return { dataBase64: toBase64(data), mimeType: 'image/jpeg', size: data.length };
+      }
+    } catch {
+      // Cloudflare image transformations may not be enabled.
+    }
+  }
+  throw new Error('image_cannot_fit_jpg_200kb');
 }
