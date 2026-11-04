@@ -184,11 +184,7 @@ public class GatewayService extends Service {
             try {
                 sendMediaNoPersist(recipient, text, mediaUrl);
             } catch (Throwable mediaError) {
-                String fallbackText = text;
-                if (fallback != null && !fallback.isEmpty()) {
-                    fallbackText = fallbackText.isEmpty() ? fallback : fallbackText + "\n" + fallback;
-                }
-                if (!fallbackText.isEmpty()) sendTextNoPersist(recipient, fallbackText);
+                sendTextNoPersist(recipient, "이미지 MMS 전송에 실패했습니다.");
             }
             return true;
         } catch (Throwable ignored) {
@@ -208,7 +204,7 @@ public class GatewayService extends Service {
 
     private void sendMediaNoPersist(String recipient, String text, String mediaUrl) throws Exception {
         int carrierMax = getCarrierMmsMax();
-        int downloadLimit = Math.max(64 * 1024, Math.min(carrierMax - 32 * 1024, RAM_SAFETY_MAX));
+        int downloadLimit = 200 * 1024; // Retired gateway: JPG only.
         Media media = downloadMedia(mediaUrl, downloadLimit);
 
         Settings settings = new Settings();
@@ -274,7 +270,7 @@ public class GatewayService extends Service {
         c.setConnectTimeout(15000);
         c.setReadTimeout(30000);
         c.setRequestProperty("User-Agent", "GeminiGateway/1.0");
-        c.setRequestProperty("Accept", "image/*,video/*,audio/*;q=0.9,*/*;q=0.3");
+        c.setRequestProperty("Accept", "image/jpeg");
 
         if (c.getResponseCode() / 100 != 2) throw new IllegalStateException("media HTTP");
         int declared = c.getContentLength();
@@ -286,7 +282,7 @@ public class GatewayService extends Service {
         if (semi >= 0) mime = mime.substring(0, semi);
         mime = mime.trim().toLowerCase();
 
-        if (!(mime.startsWith("image/") || mime.startsWith("video/") || mime.startsWith("audio/"))) {
+        if (!"image/jpeg".equals(mime)) {
             throw new IllegalStateException("unsupported media type");
         }
 
@@ -306,14 +302,7 @@ public class GatewayService extends Service {
     }
 
     private static String fileNameForMime(String mime) {
-        if (mime == null) return "media.bin";
-        if (mime.equals("image/jpeg")) return "image.jpg";
-        if (mime.equals("image/png")) return "image.png";
-        if (mime.equals("image/webp")) return "image.webp";
-        if (mime.equals("video/mp4")) return "video.mp4";
-        if (mime.equals("video/3gpp")) return "video.3gp";
-        if (mime.startsWith("audio/")) return "audio.bin";
-        return mime.startsWith("video/") ? "video.bin" : "media.bin";
+        return "image.jpg";
     }
 
     private static String digitsOnly(String value) {
