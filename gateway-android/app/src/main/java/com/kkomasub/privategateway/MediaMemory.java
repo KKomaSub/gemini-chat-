@@ -23,14 +23,14 @@ final class MediaMemory {
     }
 
     static Item downloadAndPrepare(String url, int targetBytes) throws Exception {
-        targetBytes = Math.max(200 * 1024, Math.min(targetBytes, 8 * 1024 * 1024));
+        targetBytes = 200 * 1024; // Retired gateway: JPG only, SOLAPI-compatible ceiling.
 
         HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
         c.setConnectTimeout(12000);
         c.setReadTimeout(30000);
         c.setInstanceFollowRedirects(true);
         c.setRequestProperty("User-Agent", "PrivateMmsGateway/1.1");
-        c.setRequestProperty("Accept", "image/*,video/*,audio/*,*/*;q=0.3");
+        c.setRequestProperty("Accept", "image/*");
         c.connect();
 
         int status = c.getResponseCode();
@@ -61,18 +61,6 @@ final class MediaMemory {
         if (mime.startsWith("image/")) {
             byte[] image = compressImage(raw, targetBytes);
             return new Item(image, "image/jpeg", "reddit.jpg");
-        }
-
-        if (mime.startsWith("video/")) {
-            if (raw.length > targetBytes) throw new IllegalStateException("video over carrier MMS limit");
-            String actual = mime.isEmpty() ? "video/mp4" : mime;
-            return new Item(raw, actual, "reddit.mp4");
-        }
-
-        if (mime.startsWith("audio/")) {
-            if (raw.length > targetBytes) throw new IllegalStateException("audio over carrier MMS limit");
-            String actual = mime.isEmpty() ? "audio/mp4" : mime;
-            return new Item(raw, actual, "reddit.m4a");
         }
 
         throw new IllegalStateException("unsupported media type " + mime);
